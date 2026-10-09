@@ -1,54 +1,204 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-
-const interventions = [
-  {
-    key: 'CONTINUE_OPERATION',
-    label: 'Continue Operation',
-    decisionScore: 42,
-    riskScore: 65,
-    cost: 0,
-    downtime: 0,
-    lifeImpact: 0,
-    reasoning: 'Maintains service but leaves thermal risk elevated.',
-  },
-  {
-    key: 'REDUCE_LOAD',
-    label: 'Reduce Load',
-    decisionScore: 31,
-    riskScore: 38,
-    cost: 7500,
-    downtime: 0,
-    lifeImpact: 8,
-    reasoning: 'Cuts thermal stress quickly with minimal operating disruption.',
-  },
-  {
-    key: 'SCHEDULE_MAINTENANCE',
-    label: 'Schedule Maintenance',
-    decisionScore: 45,
-    riskScore: 55,
-    cost: 15000,
-    downtime: 4,
-    lifeImpact: 25,
-    reasoning: 'Addresses degradation causes but requires a planned outage.',
-  },
-  {
-    key: 'REPLACE_ASSET',
-    label: 'Replace Asset',
-    decisionScore: 58,
-    riskScore: 70,
-    cost: 200000,
-    downtime: 8,
-    lifeImpact: 365,
-    reasoning: 'Resets asset health but carries high cost and downtime.',
-  },
-];
+import { useEffect, useState } from 'react';
+import { apiService } from '@/lib/apiService';
+import type { DecisionResponse, HealthResponse, RULResponse, RiskResponse, SimulationResponse, TelemetryData } from '@/types/api';
 
 export default function DecisionCenterPage() {
   const [selectedAsset, setSelectedAsset] = useState('T-01');
-  const recommended = 'REDUCE_LOAD';
+  const [interventions, setInterventions] = useState<Array<any>>([]);
+  const [recommended, setRecommended] = useState<string>('REDUCE_LOAD');
+  const [assetHealth, setAssetHealth] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDecisionData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch all necessary data for the decision analysis
+        const [healthResult, rulResult, riskResult, decisionResult] = await Promise.all([
+          apiService.getAssetHealth(selectedAsset, {
+            asset_id: selectedAsset,
+            load_percent: 75.0,
+            ambient_temp_c: 30.0,
+          }),
+          apiService.getAssetRUL(selectedAsset, {
+            asset_id: selectedAsset,
+            load_percent: 75.0,
+            ambient_temp_c: 30.0,
+          }),
+          apiService.getAssetRisk(selectedAsset, {
+            asset_id: selectedAsset,
+            load_percent: 75.0,
+            ambient_temp_c: 30.0,
+          }),
+          // For decision, we need to construct a proper telemetry object
+          (async () => {
+            const healthResult = await apiService.getAssetHealth(selectedAsset, {
+              asset_id: selectedAsset,
+              load_percent: 75.0,
+              ambient_temp_c: 30.0,
+            });
+            const rulResult = await apiService.getAssetRUL(selectedAsset, {
+              asset_id: selectedAsset,
+              load_percent: 75.0,
+              ambient_temp_c: 30.0,
+            });
+            const riskResult = await apiService.getAssetRisk(selectedAsset, {
+              asset_id: selectedAsset,
+              load_percent: 75.0,
+              ambient_temp_c: 30.0,
+            });
+
+            // Create a simulation request based on current conditions
+            const simRequest = {
+              load_percent: 75.0,
+              ambient_temp_c: 30.0,
+              cooling_mode: "normal",
+              harmonic_distortion_thd: 0.05,
+              hours_at_conditions: 1.0,
+              vibration_rms_mm_s: 1.5,
+              dielectric_stress_factor: 1.0,
+              symmetry_imbalance_percent: 0.0,
+              partial_discharge_detected: false
+            };
+
+            const simulationResult = await apiService.simulateAsset(selectedAsset, simRequest);
+
+            return apiService.getAssetDecision(selectedAsset, {
+              asset_id: selectedAsset,
+              load_percent: 75.0,
+              ambient_temp_c: 30.0,
+            });
+          })()
+        ]);
+
+        // Process the decision results into the format expected by the UI
+        const processedInterventions = [
+          {
+            key: 'CONTINUE_OPERATION',
+            label: 'Continue Operation',
+            decisionScore: Math.round(decisionResult.intervention_scores?.CONTINUE_OPERATION?.score || 42),
+            riskScore: Math.round(decisionResult.intervention_scores?.CONTINUE_OPERATION?.risk || 65),
+            cost: 0,
+            downtime: 0,
+            lifeImpact: 0,
+            reasoning: decisionResult.explanation?.find(exp => exp.toLowerCase().includes('continue')) ||
+                      'Maintains service but leaves thermal risk elevated.',
+          },
+          {
+            key: 'REDUCE_LOAD',
+            label: 'Reduce Load',
+            decisionScore: Math.round(decisionResult.intervention_scores?.REDUCE_LOAD?.score || 31),
+            riskScore: Math.round(decisionResult.intervention_scores?.REDUCE_LOAD?.risk || 38),
+            cost: Math.round(decisionResult.intervention_scores?.REDUCE_LOAD?.cost || 7500),
+            downtime: 0,
+            lifeImpact: 0,
+            reasoning: decisionResult.explanation?.find(exp => exp.toLowerCase().includes('reduce')) ||
+                      'Cuts thermal stress quickly with minimal operating disruption.',
+          },
+          {
+            key: 'SCHEDULE_MAINTENANCE',
+            label: 'Schedule Maintenance',
+            decisionScore: Math.round(decisionResult.intervention_scores?.SCHEDULE_MAINTENANCE?.score || 45),
+            riskScore: Math.round(decisionResult.intervention_scores?.SCHEDULE_MAINTENANCE?.risk || 55),
+            cost: Math.round(decisionResult.intervention_scores?.SCHEDULE_MAINTENANCE?.cost || 15000),
+            downtime: Math.round(decisionResult.intervention_scores?.SCHEDULE_MAINTENANCE?.downtime || 4),
+            lifeImpact: Math.round(decisionResult.intervention_scores?.SCHEDULE_MAINTENANCE?.life_impact || 25),
+            reasoning: decisionResult.explanation?.find(exp => exp.toLowerCase().includes('maintenance')) ||
+                      'Addresses degradation causes but requires a planned outage.',
+          },
+          {
+            key: 'REPLACE_ASSET',
+            label: 'Replace Asset',
+            decisionScore: Math.round(decisionResult.intervention_scores?.REPLACE_ASSET?.score || 58),
+            riskScore: Math.round(decisionResult.intervention_scores?.REPLACE_ASSET?.risk || 70),
+            cost: Math.round(decisionResult.intervention_scores?.REPLACE_ASSET?.cost || 200000),
+            downtime: Math.round(decisionResult.intervention_scores?.REPLACE_ASSET?.downtime || 8),
+            lifeImpact: Math.round(decisionResult.intervention_scores?.REPLACE_ASSET?.life_impact || 365),
+            reasoning: decisionResult.explanation?.find(exp => exp.toLowerCase().includes('replace')) ||
+                      'Resets asset health but carries high cost and downtime.',
+          },
+        ];
+
+        // Find the recommended intervention (highest score)
+        const recommendedIntervention = processedInterventions.reduce((prev, current) =>
+          (prev.decisionScore > current.decisionScore) ? prev : current
+        );
+
+        setInterventions(processedInterventions);
+        setRecommended(recommendedIntervention.key);
+        setAssetHealth({
+          healthScore: Math.round(healthResult.health_score),
+          failureProbability: Math.round(healthResult.failure_probability),
+          rulDays: Math.round(rulResult.rul_days),
+          riskLevel: riskResult.overall_risk_level
+        });
+      } catch (err) {
+        console.error('Failed to fetch decision data:', err);
+        setError('Failed to load decision data. Using fallback data.');
+
+        // Fallback to static data if API call fails
+        setInterventions([
+          {
+            key: 'CONTINUE_OPERATION',
+            label: 'Continue Operation',
+            decisionScore: 42,
+            riskScore: 65,
+            cost: 0,
+            downtime: 0,
+            lifeImpact: 0,
+            reasoning: 'Maintains service but leaves thermal risk elevated.',
+          },
+          {
+            key: 'REDUCE_LOAD',
+            label: 'Reduce Load',
+            decisionScore: 31,
+            riskScore: 38,
+            cost: 7500,
+            downtime: 0,
+            lifeImpact: 8,
+            reasoning: 'Cuts thermal stress quickly with minimal operating disruption.',
+          },
+          {
+            key: 'SCHEDULE_MAINTENANCE',
+            label: 'Schedule Maintenance',
+            decisionScore: 45,
+            riskScore: 55,
+            cost: 15000,
+            downtime: 4,
+            lifeImpact: 25,
+            reasoning: 'Addresses degradation causes but requires a planned outage.',
+          },
+          {
+            key: 'REPLACE_ASSET',
+            label: 'Replace Asset',
+            decisionScore: 58,
+            riskScore: 70,
+            cost: 200000,
+            downtime: 8,
+            lifeImpact: 365,
+            reasoning: 'Resets asset health but carries high cost and downtime.',
+          },
+        ]);
+        setRecommended('REDUCE_LOAD');
+        setAssetHealth({
+          healthScore: 67,
+          failureProbability: 31,
+          rulDays: 41,
+          riskLevel: 'HIGH'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDecisionData();
+  }, [selectedAsset]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -116,11 +266,16 @@ export default function DecisionCenterPage() {
   );
 }
 
-function Metric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'red' }) {
+function Metric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'red' | 'green' | 'yellow' }) {
+  let colorClass = 'text-gray-900';
+  if (tone === 'red') colorClass = 'text-red-700';
+  else if (tone === 'green') colorClass = 'text-green-700';
+  else if (tone === 'yellow') colorClass = 'text-yellow-800';
+
   return (
     <div className="rounded-lg bg-white p-5 shadow">
       <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${tone === 'red' ? 'text-red-700' : 'text-gray-900'}`}>{value}</p>
+      <p className={`mt-2 text-2xl font-bold ${colorClass}`}>{value}</p>
     </div>
   );
 }

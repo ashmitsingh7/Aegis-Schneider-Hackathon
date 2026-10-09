@@ -1,32 +1,116 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { apiService } from '@/lib/apiService';
+import type { HealthResponse, DecisionResponse, RULResponse, RiskResponse, SimulationResponse } from '@/types/api';
 
-const asset = {
-  assetId: 'T-01',
-  name: 'Power Transformer',
-  site: 'Main Substation Transformer',
-  healthScore: 67,
-  failureProbability: 31,
-  rulDays: 41,
-  riskLevel: 'HIGH',
-  degradation: 'Thermal stress',
-  load: 89,
-  windingTemp: 84,
-  voltage: 228.5,
-  current: 156.8,
-  efficiency: 99.9,
-  losses: 0.22,
-  recommendation: 'Reduce load',
-  recommendedScore: 31,
-  cost: 7500,
-  lifeImpact: 8,
-  reasoning: [
-    'High transformer loading',
-    'Elevated winding temperature',
-    'Load reduction significantly lowers thermal risk',
-  ],
-};
+export default function Home() {
+  const [assetData, setAssetData] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAssetData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch comprehensive asset summary
+        const summary = await apiService.getAssetSummary('T-01');
+
+        // Transform the data to match the existing UI structure
+        const transformedData = {
+          assetId: summary.asset_id,
+          name: 'Power Transformer',
+          site: 'Main Substation Transformer',
+          healthScore: Math.round(summary.health.health_score),
+          failureProbability: Math.round(summary.health.failure_probability),
+          rulDays: Math.round(summary.rul.rul_days),
+          riskLevel: summary.risk.overall_risk_level,
+          degradation: summary.health.degradation_type.replace('_', ' '),
+          load: Math.round(summary.simulation.load_percent),
+          windingTemp: Math.round(summary.simulation.winding_temp_c),
+          voltage: Math.round(summary.simulation.actual_voltage_kv * 10), // Convert to volts for display
+          current: Math.round(summary.simulation.actual_current_a),
+          efficiency: Math.round(summary.simulation.efficiency_percent),
+          losses: parseFloat(summary.simulation.total_losses_kw.toFixed(2)),
+          recommendation: summary.decision.recommended_intervention.replace('_', ' ').toLowerCase(),
+          recommendedScore: Math.round(summary.decision.optimal_intervention_score),
+          cost: Math.round(summary.decision.assessment_details?.cost || 7500),
+          lifeImpact: Math.round(summary.decision.assessment_details?.lifeImpact || 8),
+          reasoning: summary.decision.explanation || [
+            'High transformer loading',
+            'Elevated winding temperature',
+            'Load reduction significantly lowers thermal risk',
+          ],
+        };
+
+        setAssetData(transformedData);
+      } catch (err) {
+        console.error('Failed to fetch asset data:', err);
+        setError('Failed to load asset data. Using fallback data.');
+
+        // Fallback to static data if API call fails
+        setAssetData({
+          assetId: 'T-01',
+          name: 'Power Transformer',
+          site: 'Main Substation Transformer',
+          healthScore: 67,
+          failureProbability: 31,
+          rulDays: 41,
+          riskLevel: 'HIGH',
+          degradation: 'Thermal stress',
+          load: 89,
+          windingTemp: 84,
+          voltage: 228.5,
+          current: 156.8,
+          efficiency: 99.9,
+          losses: 0.22,
+          recommendation: 'Reduce load',
+          recommendedScore: 31,
+          cost: 7500,
+          lifeImpact: 8,
+          reasoning: [
+            'High transformer loading',
+            'Elevated winding temperature',
+            'Load reduction significantly lowers thermal risk',
+          ],
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAssetData();
+  }, []);
+
+  // Handle case where data is still loading or there was an error
+  const asset = assetData || {
+    assetId: 'T-01',
+    name: 'Power Transformer',
+    site: 'Main Substation Transformer',
+    healthScore: 67,
+    failureProbability: 31,
+    rulDays: 41,
+    riskLevel: 'HIGH',
+    degradation: 'Thermal stress',
+    load: 89,
+    windingTemp: 84,
+    voltage: 228.5,
+    current: 156.8,
+    efficiency: 99.9,
+    losses: 0.22,
+    recommendation: 'Reduce load',
+    recommendedScore: 31,
+    cost: 7500,
+    lifeImpact: 8,
+    reasoning: [
+      'High transformer loading',
+      'Elevated winding temperature',
+      'Load reduction significantly lowers thermal risk',
+    ],
+  };
 
 function RiskBadge({ value }: { value: string }) {
   const classes =
