@@ -54,8 +54,11 @@ This version includes enhancements to make the prototype more interactive and re
 2. **API Service Layer**: A dedicated service layer handles all communication with the backend endpoints
 3. **Real-time Data Display**: Pages update with actual data from the AI models when the backend is running
 4. **Loading States and Error Handling**: Improved user experience with loading indicators and fallback to static data when needed
+5. **Advanced Visualization**: Interactive charts, graphs, and visual indicators for instant insight (Upgrade #8)
+6. **Advanced Analytics**: Root cause analysis, what-if scenario planning, and optimization engines (Upgrade #10)
 
 To experience the real-time features, ensure the backend is running and properly configured with all dependencies.
+The advanced features are accessible via the new Analytics section in the navigation menu.
 
 ## Team Structure
 

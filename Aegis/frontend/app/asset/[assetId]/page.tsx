@@ -94,7 +94,10 @@ export default function AssetPage({ params }: { params: { assetId: string } }) {
             <h1 className="text-xl font-bold text-gray-900">Asset {params.assetId}</h1>
             <p className="text-sm text-gray-500">Transformer health, telemetry, and model explanation</p>
           </div>
-          <Link className="text-sm font-medium text-blue-700" href="/">Back to Dashboard</Link>
+          <div className="flex gap-2">
+            <Link className="text-sm font-medium text-blue-700" href="/">Back to Dashboard</Link>
+            <Link className="text-sm font-medium text-blue-700" href="/analytics">Analytics</Link>
+          </div>
         </div>
       </header>
 

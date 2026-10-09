@@ -217,7 +217,10 @@ export default function DecisionCenterPage() {
               <option value="T-01">Asset T-01</option>
               <option value="T-02">Asset T-02</option>
             </select>
-            <Link className="text-sm font-medium text-blue-700" href="/">Back to Dashboard</Link>
+            <div className="flex gap-2">
+              <Link className="text-sm font-medium text-blue-700" href="/">Back to Dashboard</Link>
+              <Link className="text-sm font-medium text-blue-700" href="/analytics">Analytics</Link>
+            </div>
           </div>
         </div>
       </header>
